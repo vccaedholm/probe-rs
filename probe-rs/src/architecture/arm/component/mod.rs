@@ -18,7 +18,7 @@ use crate::architecture::arm::{ArmProbeInterface, SwoConfig, SwoMode};
 use crate::{Core, Error, MemoryInterface, MemoryMappedRegister};
 
 pub use self::itm::Itm;
-pub use dwt::Dwt;
+pub use dwt::{Dwt, WatchKind};
 pub use scs::Scs;
 pub use swo::Swo;
 pub use tmc::TraceMemoryController;
@@ -371,6 +371,35 @@ pub fn remove_swv_data_trace(
 ) -> Result<(), ArmError> {
     let mut dwt = Dwt::new(interface, find_component(components, PeripheralType::Dwt)?);
     dwt.disable_data_trace(unit)
+}
+
+/// Configures DWT trace unit `unit` to begin watching `address`.
+///
+///
+/// Expects to be given a list of all ROM table `components` as the second argument.
+pub fn add_watchpoint(
+    interface: &mut dyn ArmProbeInterface,
+    components: &[CoresightComponent],
+    unit: usize,
+    address: u32,
+    length: usize,
+    kind: WatchKind,
+) -> Result<(), ArmError> {
+    let mut dwt = Dwt::new(interface, find_component(components, PeripheralType::Dwt)?);
+    dwt.enable_watchpoint(unit, address, length, kind)
+}
+
+/// Configures DWT trace unit `unit` to stop watching `address`.
+///
+///
+/// Expects to be given a list of all ROM table `components` as the second argument.
+pub fn remove_watchpoint(
+    interface: &mut dyn ArmProbeInterface,
+    components: &[CoresightComponent],
+    unit: usize,
+) -> Result<(), ArmError> {
+    let mut dwt = Dwt::new(interface, find_component(components, PeripheralType::Dwt)?);
+    dwt.disable_watchpoint(unit)
 }
 
 /// Sets TRCENA in DEMCR to begin trace generation.

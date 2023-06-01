@@ -11,6 +11,26 @@ use super::DebugComponentInterface;
 use crate::architecture::arm::{ArmError, ArmProbeInterface};
 use crate::{memory_mapped_bitfield_register, Error};
 
+/// Type of memory access the watchpoint shall trigger on
+pub enum WatchKind {
+    /// Trigger watchpoint on memory write
+    Write,
+    /// Trigger watchpoint on memory read
+    Read,
+    /// Trigger watchpoint on memory read or write
+    ReadWrite,
+}
+
+impl From<WatchKind> for u32 {
+    fn from(kind: WatchKind) -> Self {
+        match kind {
+            WatchKind::Write => 0b0110,
+            WatchKind::Read => 0b0101,
+            WatchKind::ReadWrite => 0b0111,
+        }
+    }
+}
+
 /// A struct representing a DWT unit on target.
 pub struct Dwt<'a> {
     component: &'a CoresightComponent,
@@ -90,6 +110,63 @@ impl<'a> Dwt<'a> {
         let mut ctrl = Ctrl::load(self.component, self.interface)?;
         ctrl.set_exctrcena(false);
         ctrl.store(self.component, self.interface)
+    }
+
+    /// Enables watchpoint a specific address in memory on a specific DWT unit.
+    pub fn enable_watchpoint(
+        &mut self,
+        unit: usize,
+        address: u32,
+        length: usize,
+        kind: WatchKind,
+    ) -> Result<(), ArmError> {
+        let mut comp = Comp::load_unit(self.component, self.interface, unit)?;
+        comp.set_comp(address);
+        comp.store_unit(self.component, self.interface, unit)?;
+
+        let mut mask = Mask::load_unit(self.component, self.interface, unit)?;
+        // Get max mask size
+        mask.set_mask(0b11111);
+        // Number of bits in the address that may be masked
+        let max_mask_size = mask.mask();
+
+        if length == 0 || !length.is_power_of_two() {
+            // Error length zero or not possible to represent in mask size register
+            return Err(ArmError::UnsupportedTransferWidth(length));
+        }
+
+        let new_mask_size = length.trailing_zeros();
+        if new_mask_size > max_mask_size {
+            // Error too large watched area
+            return Err(ArmError::OutOfBounds);
+        }
+        if address.trailing_zeros() < new_mask_size {
+            // Error not aligned
+            return Err(ArmError::MemoryNotAligned {
+                address: address.into(),
+                alignment: length,
+            });
+        }
+
+        mask.set_mask(new_mask_size);
+        mask.store_unit(self.component, self.interface, unit)?;
+
+        let mut function = Function::load_unit(self.component, self.interface, unit)?;
+        function.set_datavsize(0x0);
+        function.set_datavaddr0(0x0);
+        function.set_datavaddr1(0x0);
+        function.set_datavmatch(false);
+        function.set_cycmatch(false);
+        function.set_function(kind.into());
+
+        function.store_unit(self.component, self.interface, unit)
+    }
+
+    /// Disables watchpoint on the given unit.
+    pub fn disable_watchpoint(&mut self, unit: usize) -> Result<(), ArmError> {
+        let mut function = Function::load_unit(self.component, self.interface, unit)?;
+        function.set_function(0x0);
+        function.store_unit(self.component, self.interface, unit)
     }
 }
 

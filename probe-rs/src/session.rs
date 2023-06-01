@@ -1,6 +1,6 @@
 use probe_rs_target::CoreAccessOptions;
 
-use crate::architecture::arm::component::get_arm_components;
+use crate::architecture::arm::component::{get_arm_components, WatchKind};
 use crate::architecture::arm::sequences::{ArmDebugSequence, DefaultArmSequence};
 use crate::architecture::arm::{ApAddress, ArmError, DpAddress};
 use crate::architecture::riscv::communication_interface::RiscvError;
@@ -661,6 +661,33 @@ impl Session {
         let components = self.get_arm_components(DpAddress::Default)?;
         let interface = self.get_arm_interface()?;
         crate::architecture::arm::component::remove_swv_data_trace(interface, &components, unit)
+    }
+
+    /// Begin watching a memory address over SWV.
+    pub fn add_data_watchpoint(
+        &mut self,
+        unit: usize,
+        address: u32,
+        length: usize,
+        kind: WatchKind,
+    ) -> Result<(), ArmError> {
+        let components = self.get_arm_components(DpAddress::Default)?;
+        let interface = self.get_arm_interface()?;
+        crate::architecture::arm::component::add_watchpoint(
+            interface,
+            &components,
+            unit,
+            address,
+            length,
+            kind,
+        )
+    }
+
+    /// Stop watching a memory address over SWV.
+    pub fn remove_data_watchpoint(&mut self, unit: usize) -> Result<(), ArmError> {
+        let components = self.get_arm_components(DpAddress::Default)?;
+        let interface = self.get_arm_interface()?;
+        crate::architecture::arm::component::remove_watchpoint(interface, &components, unit)
     }
 
     /// Return the `Architecture` of the currently connected chip.
