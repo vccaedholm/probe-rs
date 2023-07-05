@@ -35,6 +35,7 @@ impl From<WatchKind> for u32 {
 pub struct Dwt<'a> {
     component: &'a CoresightComponent,
     interface: &'a mut dyn ArmProbeInterface,
+    number_of_comparators: Option<u8>,
 }
 
 impl<'a> Dwt<'a> {
@@ -46,7 +47,56 @@ impl<'a> Dwt<'a> {
         Dwt {
             interface,
             component,
+            number_of_comparators: None,
         }
+    }
+
+    /// Returns the number of implemented comparators. Returns zero if DWT does
+    /// not support comparators. All comparators do support address comparison.
+    pub fn available_comparators(&mut self) -> Result<u8, ArmError> {
+        if self.number_of_comparators.is_none() {
+            self.number_of_comparators =
+                Some(Ctrl::load(self.component, self.interface)?.numcomp());
+        }
+        // Is Some for sure due to the line above
+        Ok(self.number_of_comparators.unwrap())
+    }
+
+    /// Get the currently configured function of the specified comparator.
+    pub fn current_function(&mut self, unit: usize) -> Result<u32, ArmError> {
+        Ok(Function::load_unit(self.component, self.interface, unit)?.function())
+    }
+
+    /// Get the currently configured comparator value of the specified comparator.
+    pub fn current_comparator_value(&mut self, unit: usize) -> Result<u32, ArmError> {
+        Ok(Comp::load_unit(self.component, self.interface, unit)?.comp())
+    }
+
+    /// Find the first disabled comparator. (Could also be part of a LinkAddr
+    /// comparision.)
+    pub fn find_first_disabled_comparator(&mut self) -> Result<usize, ArmError> {
+        for comp in 0..self.available_comparators()?.into() {
+            if self.current_function(comp.into())? == 0b0000 {
+                return Ok(comp);
+            }
+        }
+        Err(ArmError::NoComparatorAvailable)
+    }
+
+    /// Find a comparator configured for watching the specified
+    /// memory address
+    pub fn find_matching_watchpoint_comparator(&mut self, address: u32) -> Result<usize, ArmError> {
+        for comp in 0..self.available_comparators()?.into() {
+            let function = self.current_function(comp.into())?;
+            if (function == WatchKind::Read.into()
+                || function == WatchKind::Write.into()
+                || function == WatchKind::ReadWrite.into())
+                && address == self.current_comparator_value(comp)?
+            {
+                return Ok(comp);
+            }
+        }
+        Err(ArmError::NoComparatorAvailable)
     }
 
     /// Logs some info about the DWT component.

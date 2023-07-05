@@ -389,6 +389,22 @@ pub fn add_watchpoint(
     dwt.enable_watchpoint(unit, address, length, kind)
 }
 
+/// Returns any watchpoint comparator that is setup for the given `address` that may
+/// be used to modify or delete the watchpoint. If no comparator is found, return the
+/// first unused comparator that may be used to setup a new watchpoint.
+pub fn get_watchpoint_unit(
+    interface: &mut dyn ArmProbeInterface,
+    components: &[CoresightComponent],
+    address: u32,
+) -> Result<usize, ArmError> {
+    let mut dwt = Dwt::new(interface, find_component(components, PeripheralType::Dwt)?);
+    Ok(match dwt.find_matching_watchpoint_comparator(address) {
+        Ok(unit) => unit,
+        Err(ArmError::NoComparatorAvailable) => dwt.find_first_disabled_comparator()?,
+        Err(e) => Err(e)?,
+    })
+}
+
 /// Configures DWT trace unit `unit` to stop watching `address`.
 ///
 ///

@@ -663,16 +663,21 @@ impl Session {
         crate::architecture::arm::component::remove_swv_data_trace(interface, &components, unit)
     }
 
-    /// Begin watching a memory address over SWV.
+    /// Begin watching a memory address.
     pub fn add_data_watchpoint(
         &mut self,
-        unit: usize,
         address: u32,
         length: usize,
         kind: WatchKind,
-    ) -> Result<(), ArmError> {
+    ) -> Result<(), Error> {
         let components = self.get_arm_components(DpAddress::Default)?;
         let interface = self.get_arm_interface()?;
+        let unit = crate::architecture::arm::component::get_watchpoint_unit(
+            interface,
+            &components,
+            address,
+        )?;
+
         crate::architecture::arm::component::add_watchpoint(
             interface,
             &components,
@@ -681,13 +686,22 @@ impl Session {
             length,
             kind,
         )
+        .map_err(Error::Arm)
     }
 
-    /// Stop watching a memory address over SWV.
-    pub fn remove_data_watchpoint(&mut self, unit: usize) -> Result<(), ArmError> {
+    /// Stop watching a memory address.
+    pub fn remove_data_watchpoint(&mut self, address: u32) -> Result<(), Error> {
         let components = self.get_arm_components(DpAddress::Default)?;
         let interface = self.get_arm_interface()?;
+        // TODO: Will get unused unit if address is not watched and unit is available,
+        // harmeless but should return error
+        let unit = crate::architecture::arm::component::get_watchpoint_unit(
+            interface,
+            &components,
+            address,
+        )?;
         crate::architecture::arm::component::remove_watchpoint(interface, &components, unit)
+            .map_err(Error::Arm)
     }
 
     /// Return the `Architecture` of the currently connected chip.

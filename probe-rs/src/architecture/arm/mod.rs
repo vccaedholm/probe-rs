@@ -132,6 +132,9 @@ pub enum ArmError {
     /// Failed to erase chip
     ChipEraseFailed,
 
+    /// There is no available DWT comparator
+    NoComparatorAvailable,
+
     /// Any other error occurred.
     Other(#[from] anyhow::Error),
 }
