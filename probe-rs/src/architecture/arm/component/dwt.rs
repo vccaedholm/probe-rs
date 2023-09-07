@@ -218,6 +218,15 @@ impl<'a> Dwt<'a> {
         function.set_function(0x0);
         function.store_unit(self.component, self.interface, unit)
     }
+
+    /// Enable PC sample trace output
+    pub fn enable_pc_sampling(&mut self) -> Result<(), ArmError> {
+        let mut ctrl = Ctrl::load(self.component, self.interface)?;
+        ctrl.set_pcsamplena(true);
+        ctrl.set_cyctap(true);
+        ctrl.set_postpreset(0x3);
+        ctrl.store(self.component, self.interface)
+    }
 }
 
 memory_mapped_bitfield_register! {
